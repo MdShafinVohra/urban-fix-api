@@ -13,6 +13,13 @@
 	"upload_source_maps": true,
 	"compatibility_flags": [
 		"nodejs_compat"
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "urbanFix",
+			"database_id": "485379c1-f7ff-44d4-92b9-6553942b6e46"
+		}
 	]
 	/**
 	 * Smart Placement

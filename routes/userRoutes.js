@@ -1,0 +1,54 @@
+import express from "express";
+import { expect } from "vitest";
+import { env } from "cloudflare:workers";
+
+const router = express.Router();
+
+router.get("/", async (req, res) => {
+    try {
+        const { results } = await env.DB.prepare('SELECT * FROM users').all();
+        res.json({ success: true, users: results });
+    } catch (err) {
+        res.status(500).send(err.message);
+    }
+});
+
+router.post("/", async (req, res) => {
+    try {
+        const { userName, email, role } = req.body;
+
+        if (!userName || !email || !role) {
+            return res.status(400).json({ success: false, error: "Missing Required Values" });
+        }
+
+        // Email Validation
+        if (!email.includes("@") || !email.includes(".")) {
+            return res.status(400).json({
+                success: false,
+                error: "Invalid Email Format"
+            });
+        }
+
+        const created_at = new Date().toISOString().split("T")[0];
+
+        const results = await env.DB.prepare("INSERT INTO users (user_name, email, role, created_at) VALUES (?, ?, ?, ?)").bind(userName, email, role, created_at).run();
+
+        if (results.success) {
+            res.status(201).json({
+                success: true,
+                message: "member created successfully",
+                id: results.meta.last_row_id
+            });
+        } else {
+            res.status(500).json({
+                success: false,
+                error: "Failed to create Member"
+            });
+        }
+
+    } catch (err) {
+        res.status(500).send(err.message);
+    }
+})
+
+module.exports = router;

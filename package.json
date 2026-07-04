@@ -12,5 +12,11 @@
     "@cloudflare/vitest-pool-workers": "^0.12.4",
     "vitest": "~3.2.0",
     "wrangler": "^4.106.0"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "firebase": "^12.15.0",
+    "firebase-admin": "^14.1.0"
   }
 }
