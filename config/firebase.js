@@ -1,20 +1,26 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+// config/firebase.js
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import 'dotenv/config'; // This is the ES6 shortcut to load dotenv
 
-// Your web app's Firebase configuration
-const firebaseConfig = {
-    apiKey: "AIzaSyCSSaRON1uw-vI2yKnkthRkX0RT0laYspI",
-    authDomain: "urbanfix-c976f.firebaseapp.com",
-    projectId: "urbanfix-c976f",
-    storageBucket: "urbanfix-c976f.firebasestorage.app",
-    messagingSenderId: "1035690937059",
-    appId: "1:1035690937059:web:1a576bb6f36993480f13d6"
-};
+try {
+    // Ensure the environment variable exists before parsing
+    if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
+        throw new Error('Missing FIREBASE_SERVICE_ACCOUNT environment variable.');
+    }
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+    // Parse the stringified JSON from your .env file
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
+    // Initialize the Admin SDK with the explicit credentials
+    initializeApp({
+        credential: cert(serviceAccount)
+    });
+
+    console.log('Firebase Admin SDK initialized successfully.');
+} catch (error) {
+    console.error('Firebase Admin initialization error:', error.message);
+}
+
+// Export the auth instance to be used by your middleware
+export const adminAuth = getAuth();

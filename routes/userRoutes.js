@@ -1,10 +1,12 @@
 import express from "express";
 import { expect } from "vitest";
 import { env } from "cloudflare:workers";
+import { verifyToken, verifyAdmin } from "../middleware/auth";
 
 const router = express.Router();
 
-router.get("/", async (req, res) => {
+// Get All Users
+router.get("/", verifyToken, verifyAdmin, async (req, res) => {
     try {
         const { results } = await env.DB.prepare('SELECT * FROM users').all();
         res.json({ success: true, users: results });
@@ -13,9 +15,13 @@ router.get("/", async (req, res) => {
     }
 });
 
-router.post("/", async (req, res) => {
+
+// Sign Up
+router.post("/", verifyToken, async (req, res) => {
     try {
-        const { userName, email, role } = req.body;
+
+        const email = req.user.email;
+        const { userName, role } = req.body;
 
         if (!userName || !email || !role) {
             return res.status(400).json({ success: false, error: "Missing Required Values" });
