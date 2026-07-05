@@ -9,7 +9,7 @@ export const verifyToken = async (req, res, next) => {
         return res.status(401).json({ success: false, error: "UnAuthorized or Missing Token" });
     }
 
-    const idToken = authHeader.split(authHeader, "Bearer ")[1];
+    const idToken = authHeader.split(' ')[1];
     console.log(authHeader.split(authHeader, "Bearer "));
 
     try {
