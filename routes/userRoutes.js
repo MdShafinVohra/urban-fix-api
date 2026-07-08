@@ -5,6 +5,22 @@ import { verifyToken, verifyAdmin } from "../middleware/auth";
 
 const router = express.Router();
 
+router.get("/me", verifyToken, async (req, res) => {
+    try {
+        const email = req.user.email;
+        const user = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(email).first();
+
+        if (!user) {
+            return res.status(404).json({ success: false, error: "User not found" });
+        }
+
+        res.status(200).json({ success: true, user });
+    } catch (err) {
+        console.error("GET /users/me error:", err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // Get All Users
 router.get("/", verifyToken, verifyAdmin, async (req, res) => {
     try {
@@ -17,8 +33,8 @@ router.get("/", verifyToken, verifyAdmin, async (req, res) => {
 
 router.post("/login", verifyToken, async (req, res) => {
     console.log("Login Endpoint");
-    res.status(200).send("Login Success")
-})
+    res.status(200).json({ success: true, message: "Login Success", dbUser: req.dbUser });
+});
 
 // Sign Up
 router.post("/", verifyToken, async (req, res) => {
@@ -48,7 +64,8 @@ router.post("/", verifyToken, async (req, res) => {
             res.status(201).json({
                 success: true,
                 message: "member created successfully",
-                id: results.meta.last_row_id
+                id: results.meta.last_row_id,
+                dbUser: req.dbUser
             });
             console.log(`Member created successfully with ID: ${results.meta.last_row_id}`);
         } else {
