@@ -14,9 +14,9 @@ export const verifyToken = async (req, res, next) => {
     try {
         const decodedToken = await adminAuth.verifyIdToken(idToken);
         const DBuser = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(decodedToken.email).first();
-
         console.log("here is decoded token");
         console.log(decodedToken);
+        console.log(decodedToken.email);
         req.user = decodedToken;
         req.dbUser = DBuser;
         console.log(`Token verified successfully for user: ${decodedToken.email}`);

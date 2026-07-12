@@ -3,6 +3,7 @@ import { httpServerHandler } from "cloudflare:node";
 import express, { urlencoded } from "express";
 import userRouter from "../routes/userRoutes";
 import cors from "cors";
+import servicesRouter from "../routes/servicesRoutes"
 
 const app = express();
 
@@ -22,6 +23,8 @@ app.use(cors({
 // User Routes
 app.use("/users", userRouter);
 
+// Services Routes
+app.use("/services", servicesRouter)
 
 
 // Health check endpoint

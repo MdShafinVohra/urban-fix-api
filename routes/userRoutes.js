@@ -41,7 +41,8 @@ router.post("/", verifyToken, async (req, res) => {
     try {
 
         const email = req.user.email;
-        const { userName, role } = req.body;
+        const { userName } = req.body;
+        const role = "USER"
 
         if (!userName || !email || !role) {
             return res.status(400).json({ success: false, error: "Missing Required Values" });
