@@ -5,9 +5,12 @@ import { verifyToken, verifyAdmin } from "../middleware/auth";
 
 const router = express.Router();
 
+// GET /users/me
 router.get("/me", verifyToken, async (req, res) => {
     try {
-        const email = req.user.email;
+        const email = req.user.email; // From your verifyToken middleware
+
+        // Fetch the user from D1
         const user = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(email).first();
 
         if (!user) {
@@ -39,10 +42,10 @@ router.post("/login", verifyToken, async (req, res) => {
 // Sign Up
 router.post("/", verifyToken, async (req, res) => {
     try {
-
         const email = req.user.email;
-        const { userName } = req.body;
-        const role = "USER"
+        // 1. Extract imageUrl (or image key) from the request body
+        const { userName, imageUrl } = req.body;
+        const role = "USER";
 
         if (!userName || !email || !role) {
             return res.status(400).json({ success: false, error: "Missing Required Values" });
@@ -58,7 +61,11 @@ router.post("/", verifyToken, async (req, res) => {
 
         const created_at = new Date().toISOString().split("T")[0];
 
-        const results = await env.DB.prepare("INSERT INTO users (user_name, email, role, created_at) VALUES (?, ?, ?, ?)").bind(userName, email, role, created_at).run();
+        // 2. Update the SQL query and bindings to include image_url
+        const results = await env.DB.prepare(
+            "INSERT INTO users (user_name, email, role, created_at, image_url) VALUES (?, ?, ?, ?, ?)"
+        ).bind(userName, email, role, created_at, imageUrl || null).run();
+
         console.log(results);
 
         if (results.success) {
@@ -66,7 +73,7 @@ router.post("/", verifyToken, async (req, res) => {
                 success: true,
                 message: "member created successfully",
                 id: results.meta.last_row_id,
-                dbUser: req.dbUser
+                dbUser: req.dbUser // Assuming this is populated by verifyToken middleware
             });
             console.log(`Member created successfully with ID: ${results.meta.last_row_id}`);
         } else {
@@ -80,6 +87,6 @@ router.post("/", verifyToken, async (req, res) => {
         console.error("POST /users Error:", err);
         res.status(500).send(err.message);
     }
-})
+});
 
 module.exports = router;

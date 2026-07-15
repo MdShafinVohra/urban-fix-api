@@ -14,10 +14,13 @@
     "wrangler": "^4.106.0"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1087.0",
+    "aws4fetch": "^1.0.20",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "firebase": "^12.15.0",
-    "firebase-admin": "^14.1.0"
+    "firebase-admin": "^14.1.0",
+    "multer": "^2.2.0"
   }
 }
