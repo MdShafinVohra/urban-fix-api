@@ -1,7 +1,6 @@
-import { adminAuth } from "../config/firebase.js";
+import { getAdminAuth } from "../config/firebase";
 import { env } from "cloudflare:workers";
 
-// export async function verifyToken(req, res, next) {
 export const verifyToken = async (req, res, next) => {
     const authHeader = req.headers.authorization;
 
@@ -11,62 +10,66 @@ export const verifyToken = async (req, res, next) => {
 
     const idToken = authHeader.split(' ')[1];
 
+    // console.log(idToken)
+    // console.log(authHeader)
+
+
     try {
-        const decodedToken = await adminAuth.verifyIdToken(idToken);
+        // FIX 1: Call getAdminAuth() as a function
+        const decodedToken = await getAdminAuth().verifyIdToken(idToken);
+
         const DBuser = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(decodedToken.email).first();
-        console.log("here is decoded token");
-        console.log(decodedToken);
-        console.log(decodedToken.email);
+
         req.user = decodedToken;
         req.dbUser = DBuser;
         console.log(`Token verified successfully for user: ${decodedToken.email}`);
+
         next();
     } catch (err) {
-        res.status(500).send(err.message);
+        console.error("Token verification error:", err.message);
+
+        // TEMPORARY: Send the real error to the frontend so you can see it!
+        res.status(401).json({
+            success: false,
+            error: err.message,
+            stack: err.stack
+        });
     }
 }
 
 export const verifyAdmin = async (req, res, next) => {
     try {
-        const email = req.user.email;
-        const user = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(email).first();
-
-        if (!user || user.role !== "ADMIN") {
+        // FIX 2: Use the dbUser we already fetched in verifyToken! No need to hit the database again.
+        if (!req.dbUser || req.dbUser.role !== "ADMIN") {
             return res.status(403).json({ success: false, error: "Admin access required" });
         }
 
         next();
     } catch (err) {
-        res.status(500).json({ success: false, error: "Unauthorized" });
+        res.status(500).json({ success: false, error: "Server Error" });
     }
 }
 
 export const verifyAgent = async (req, res, next) => {
     try {
-        const email = req.user.email;
-        const user = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(email).first();
-
-        if (!user || user.role !== "AGENT") {
+        if (!req.dbUser || req.dbUser.role !== "AGENT") {
             return res.status(403).json({ success: false, error: "Agent access required" });
         }
 
         next();
     } catch (err) {
-        res.status(500).json({ success: false, error: "Unauthorized" });
+        res.status(500).json({ success: false, error: "Server Error" });
     }
 }
 
 export const verifyVendor = async (req, res, next) => {
     try {
-        const email = req.user.email;
-        const user = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(email).first();
-
-        if (!user || user.role !== "VENDOR") {
+        if (!req.dbUser || req.dbUser.role !== "VENDOR") {
             return res.status(403).json({ success: false, error: "Vendor access required" });
         }
 
         next();
     } catch (err) {
-        res.status(500).json({ success: false, error: "Unauthorized" });
+        res.status(500).json({ success: false, error: "Server Error" });
     }
 }
