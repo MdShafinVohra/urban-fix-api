@@ -16,7 +16,6 @@ app.use(urlencoded({ extended: true, limit: '10mb' }));
 
 app.use(cors({
 	origin: "http://localhost:3000",
-	// origin: "https://urbanfix.assignova-team.workers.dev/"
 	methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 	allowedHeaders: ["Content-Type", "Authorization"],
 }));

@@ -122,6 +122,7 @@ router.get('/categories', async (req, res) => {
         const db = env.DB;
         // Select image_url so the frontend can display it
         const { results } = await db.prepare('SELECT id, name, image_url FROM categories ORDER BY name').all();
+        console.log(results);
         res.status(200).json({ success: true, categories: results });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
