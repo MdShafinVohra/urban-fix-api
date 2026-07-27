@@ -52,3 +52,6 @@ CREATE TABLE service_cities (
     FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE,
     FOREIGN KEY (city_id) REFERENCES cities(id) ON DELETE CASCADE
 );
+
+ALTER TABLE categories ADD COLUMN image_url TEXT;
+ALTER TABLE sub_categories ADD COLUMN image_url TEXT;
