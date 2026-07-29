@@ -7,7 +7,7 @@ const router = express.Router();
 // GET: Fetch all services
 router.get('/', async (req, res) => {
     try {
-        const db = env.DB;
+        const db = await env.DB;
 
         const query = `
             SELECT 
@@ -53,7 +53,7 @@ router.get('/', async (req, res) => {
 // POST: Create a new service
 router.post('/', verifyToken, verifyAdmin, async (req, res) => {
     try {
-        const db = env.DB;
+        const db = await env.DB;
         // Extract imageUrl from req.body
         const { name, category_id, sub_category_id, description, price, city_ids, imageUrl } = req.body;
 
@@ -102,7 +102,7 @@ router.post('/', verifyToken, verifyAdmin, async (req, res) => {
 // POST: Create a new category
 router.post('/categories', verifyToken, verifyAdmin, async (req, res) => {
     try {
-        const db = env.DB;
+        const db = await env.DB;
         const { name, imageUrl } = req.body; // Added imageUrl
 
         if (!name) return res.status(400).json({ success: false, message: "Name is required" });
@@ -119,7 +119,7 @@ router.post('/categories', verifyToken, verifyAdmin, async (req, res) => {
 // GET: Fetch all categories
 router.get('/categories', async (req, res) => {
     try {
-        const db = env.DB;
+        const db = await env.DB;
         // Select image_url so the frontend can display it
         const { results } = await db.prepare('SELECT id, name, image_url FROM categories ORDER BY name').all();
         console.log(results);
@@ -132,7 +132,7 @@ router.get('/categories', async (req, res) => {
 // POST: Create a new sub-category
 router.post('/sub-categories', verifyToken, verifyAdmin, async (req, res) => {
     try {
-        const db = env.DB;
+        const db = await env.DB;
         const { name, category_id, imageUrl } = req.body; // Added imageUrl
 
         if (!name || !category_id) {
@@ -151,7 +151,7 @@ router.post('/sub-categories', verifyToken, verifyAdmin, async (req, res) => {
 // GET: Fetch all sub-categories
 router.get('/sub-categories', async (req, res) => {
     try {
-        const db = env.DB;
+        const db = await env.DB;
         // Select image_url
         const { results } = await db.prepare('SELECT id, category_id, name, image_url FROM sub_categories ORDER BY name').all();
         res.status(200).json({ success: true, sub_categories: results });
@@ -163,7 +163,7 @@ router.get('/sub-categories', async (req, res) => {
 // POST: Create a new city
 router.post('/cities', verifyToken, verifyAdmin, async (req, res) => {
     try {
-        const db = env.DB;
+        const db = await env.DB;
         const { name, imageUrl } = req.body; // Added imageUrl
 
         if (!name) return res.status(400).json({ success: false, message: "Name is required" });
@@ -185,7 +185,7 @@ router.post('/cities', verifyToken, verifyAdmin, async (req, res) => {
 // GET: Fetch all cities
 router.get('/cities', async (req, res) => {
     try {
-        const db = env.DB;
+        const db = await env.DB;
         // Select image_url so the frontend can display it
         const { results } = await db.prepare('SELECT id, name, image_url FROM cities ORDER BY name').all();
         res.status(200).json({ success: true, cities: results });
@@ -197,7 +197,7 @@ router.get('/cities', async (req, res) => {
 // GET: Fetch a single service by ID
 router.get('/:id', async (req, res) => {
     try {
-        const db = env.DB; // Fixed from req.env.DB to env.DB
+        const db = await env.DB; // Fixed from await env.DB to await env.DB
         const serviceId = req.params.id;
 
         const query = `

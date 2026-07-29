@@ -11,7 +11,7 @@ router.get("/me", verifyToken, async (req, res) => {
         const email = req.user.email; // From your verifyToken middleware
 
         // Fetch the user from D1
-        const user = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(email).first();
+        const user = await await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(email).first();
 
         if (!user) {
             return res.status(404).json({ success: false, error: "User not found" });
@@ -27,7 +27,7 @@ router.get("/me", verifyToken, async (req, res) => {
 // Get All Users
 router.get("/", verifyToken, verifyAdmin, async (req, res) => {
     try {
-        const { results } = await env.DB.prepare('SELECT * FROM users').all();
+        const { results } = await await env.DB.prepare('SELECT * FROM users').all();
         res.json({ success: true, users: results });
     } catch (err) {
         res.status(500).send(err.message);
@@ -44,7 +44,7 @@ router.post("/", verifyToken, async (req, res) => {
     try {
         const email = req.user.email;
         // 1. Extract imageUrl (or image key) from the request body
-        const { userName, imageUrl } = req.body;
+        const { userName, imageUrl, phone } = req.body;
         const role = "USER";
 
         if (!userName || !email || !role) {
@@ -62,9 +62,9 @@ router.post("/", verifyToken, async (req, res) => {
         const created_at = new Date().toISOString().split("T")[0];
 
         // 2. Update the SQL query and bindings to include image_url
-        const results = await env.DB.prepare(
-            "INSERT INTO users (user_name, email, role, created_at, image_url) VALUES (?, ?, ?, ?, ?)"
-        ).bind(userName, email, role, created_at, imageUrl || null).run();
+        const results = await await env.DB.prepare(
+            "INSERT INTO users (user_name, email, role, created_at, image_url, phone) VALUES (?, ?, ?, ?, ?, ?)"
+        ).bind(userName, email, role, created_at, imageUrl || null, phone || null).run();
 
         console.log(results);
 
