@@ -1,11 +1,14 @@
 import express from 'express';
 import { env } from "cloudflare:workers";
 import { verifyToken, verifyAdmin } from "../middleware/auth";
+import crypto from "crypto";
 
 const router = express.Router();
 
 
-// This endpoint is called when the user clicks "Pay Now". It checks the order, creates a pending record in the payment_details table, and returns mock data that you would normally replace with a real SDK call to Stripe, Razorpay, etc.
+// POST /payments/initiate
+// Creates a pending payment record in DB, then calls Razorpay's Orders API
+// to create a real order. Returns the razorpay_order_id for the frontend checkout modal.
 router.post('/initiate', verifyToken, async (req, res) => {
     try {
         const db = await env.DB;
@@ -28,21 +31,51 @@ router.post('/initiate', verifyToken, async (req, res) => {
             return res.status(400).json({ success: false, message: "Order is already paid" });
         }
 
-        // 2. Create a pending payment record
-        const paymentRecord = await db.prepare(`
-            INSERT INTO payment_details (order_id, user_id, amount, status) 
-            VALUES (?, ?, ?, 'pending') RETURNING id
-        `).bind(order_id, userId, order.total_amount).first();
+        // 2. Convert amount to paise (Razorpay requires integer paise)
+        const amountInPaise = Math.round(order.total_amount * 100);
+        if (amountInPaise < 100) {
+            return res.status(400).json({ success: false, message: "Minimum payable amount is ₹1" });
+        }
 
-        // 3. TODO: In a real app, you call your payment gateway here
-        // const gatewaySession = await stripe.checkout.sessions.create({...})
+        // 3. Create Razorpay order via their REST API
+        const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
+        const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
+
+        const razorpayResponse = await fetch('https://api.razorpay.com/v1/orders', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Basic ' + btoa(`${razorpayKeyId}:${razorpayKeySecret}`)
+            },
+            body: JSON.stringify({
+                amount: amountInPaise,
+                currency: 'INR',
+                receipt: `order_${order_id}_${Date.now()}`
+            })
+        });
+
+        if (!razorpayResponse.ok) {
+            const errBody = await razorpayResponse.text();
+            console.error('Razorpay order creation failed:', errBody);
+            return res.status(500).json({ success: false, message: "Failed to create Razorpay order" });
+        }
+
+        const razorpayOrder = await razorpayResponse.json();
+
+        // 4. Create a pending payment record in our DB, storing the razorpay_order_id
+        const paymentRecord = await db.prepare(`
+            INSERT INTO payment_details (order_id, user_id, amount, status, transaction_id) 
+            VALUES (?, ?, ?, 'pending', ?) RETURNING id
+        `).bind(order_id, userId, order.total_amount, razorpayOrder.id).first();
 
         res.status(200).json({
             success: true,
             message: "Payment initiated",
             payment_id: paymentRecord.id,
             amount: order.total_amount,
-            // gateway_token: gatewaySession.id // Send token to frontend
+            razorpay_order_id: razorpayOrder.id,
+            razorpay_key_id: razorpayKeyId,
+            currency: 'INR'
         });
 
     } catch (err) {
@@ -52,49 +85,67 @@ router.post('/initiate', verifyToken, async (req, res) => {
 });
 
 
-// After the user completes the payment on the frontend, your app calls this endpoint (or the payment gateway hits it via a Webhook). It updates the payment_details and then marks the actual orders table as paid using a batch transaction.
+// POST /payments/verify
+// Receives razorpay_payment_id, razorpay_order_id, razorpay_signature from the frontend
+// after the Razorpay checkout modal completes. Verifies the signature using HMAC-SHA256
+// and marks the order as paid only if the signature is valid.
 router.post('/verify', verifyToken, async (req, res) => {
     try {
         const db = await env.DB;
         const userId = req.dbUser.id;
-        const { order_id, transaction_id, payment_method, payment_status } = req.body;
+        const { order_id, razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
 
-        // Ensure required fields are present
-        if (!order_id || !transaction_id || !payment_status) {
-            return res.status(400).json({ success: false, message: "Missing payment details" });
+        // Validate required fields
+        if (!order_id || !razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
+            return res.status(400).json({ success: false, message: "Missing payment verification details" });
         }
 
-        // Validate status
-        if (!['success', 'failed'].includes(payment_status)) {
-            return res.status(400).json({ success: false, message: "Invalid payment status" });
+        // 1. Verify the payment signature
+        //    Algorithm: HMAC-SHA256(razorpay_order_id + "|" + razorpay_payment_id, KEY_SECRET)
+        const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
+        const generatedSignature = crypto
+            .createHmac('sha256', razorpayKeySecret)
+            .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+            .digest('hex');
+
+        if (generatedSignature !== razorpay_signature) {
+            // Signature mismatch — do NOT mark as paid
+            // Update payment record as failed
+            await db.prepare(`
+                UPDATE payment_details 
+                SET status = 'failed', payment_method = 'razorpay'
+                WHERE transaction_id = ? AND user_id = ? AND status = 'pending'
+            `).bind(razorpay_order_id, userId).run();
+
+            return res.status(400).json({
+                success: false,
+                message: "Payment verification failed. Signature mismatch."
+            });
         }
 
+        // 2. Signature is valid — update DB in a batch transaction
         const statements = [];
 
-        // 1. Update the payment_details record
+        // Update payment_details: set status to success and store the actual payment ID
         statements.push(
             db.prepare(`
                 UPDATE payment_details 
-                SET transaction_id = ?, payment_method = ?, status = ?
-                WHERE order_id = ? AND user_id = ? AND status = 'pending'
-            `).bind(transaction_id, payment_method || 'unknown', payment_status, order_id, userId)
+                SET transaction_id = ?, payment_method = 'razorpay', status = 'success'
+                WHERE transaction_id = ? AND user_id = ? AND status = 'pending'
+            `).bind(razorpay_payment_id, razorpay_order_id, userId)
         );
 
-        // 2. If the payment was successful, update the main orders table
-        if (payment_status === 'success') {
-            statements.push(
-                db.prepare(`
-                    UPDATE orders 
-                    SET payment_status = 'paid' 
-                    WHERE id = ? AND user_id = ?
-                `).bind(order_id, userId)
-            );
-        }
+        // Update the main orders table payment status
+        statements.push(
+            db.prepare(`
+                UPDATE orders 
+                SET payment_status = 'paid' 
+                WHERE id = ? AND user_id = ?
+            `).bind(order_id, userId)
+        );
 
-        // Execute both updates safely in a single batch
         const results = await db.batch(statements);
 
-        // Check if the payment_details row was actually updated
         if (results[0].meta.changes === 0) {
             return res.status(400).json({
                 success: false,
@@ -104,7 +155,7 @@ router.post('/verify', verifyToken, async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: `Payment marked as ${payment_status}`,
+            message: "Payment verified and order marked as paid",
             order_id: order_id
         });
 
@@ -114,7 +165,5 @@ router.post('/verify', verifyToken, async (req, res) => {
     }
 });
 
-
-// Important Note: In a production environment, relying solely on the frontend to call /verify is risky because users might close their browser before the call finishes. You should eventually map this logic to a Webhook URL that your payment gateway (like Stripe) calls directly. When moving to webhooks, you would remove the verifyToken middleware and instead verify the gateway's cryptographic signature.
 
 export default router;
