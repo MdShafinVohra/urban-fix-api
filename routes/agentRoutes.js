@@ -14,9 +14,11 @@ router.get('/tasks', verifyToken, verifyAgent, async (req, res) => {
             SELECT 
                 oi.id as task_id, 
                 s.name as service_name,
+                s.description as service_description,
                 o.service_address,
                 u.user_name as customer_name,
                 u.email as customer_email,
+                u.phone as customer_phone,
                 oi.price_at_booking,
                 oi.created_at as assigned_date
             FROM ordered_items oi

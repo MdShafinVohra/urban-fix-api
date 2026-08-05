@@ -83,6 +83,8 @@ router.get('/tasks/unassigned', verifyToken, verifyAdmin, async (req, res) => {
                 o.service_address, 
                 c.name as city_name, 
                 o.city_id,
+                o.id as order_id,
+                o.payment_status,
                 u.user_name as customer_name,
                 u.phone as customer_phone,
                 oi.created_at
@@ -241,6 +243,49 @@ router.get('/tasks/all', verifyToken, verifyAdmin, async (req, res) => {
         const { results } = await db.prepare(query).bind(...params).all();
 
         res.status(200).json({ success: true, tasks: results });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// PATCH /admin/orders/:orderId/mark-paid — Admin marks an order as paid
+// Used when payment was collected offline or admin needs to override payment status
+router.patch('/orders/:orderId/mark-paid', verifyToken, verifyAdmin, async (req, res) => {
+    try {
+        const db = await env.DB;
+        const orderId = req.params.orderId;
+
+        // 1. Fetch the order to check current payment status
+        const order = await db.prepare(
+            'SELECT id, payment_status, total_amount FROM orders WHERE id = ?'
+        ).bind(orderId).first();
+
+        if (!order) {
+            return res.status(404).json({ success: false, message: "Order not found" });
+        }
+
+        if (order.payment_status === 'paid') {
+            return res.status(400).json({ success: false, message: "Order is already marked as paid" });
+        }
+
+        // 2. Update order payment_status to 'paid'
+        await db.prepare(
+            `UPDATE orders SET payment_status = 'paid' WHERE id = ?`
+        ).bind(orderId).run();
+
+        // 3. Also create a payment_details record for audit trail
+        await db.prepare(`
+            INSERT INTO payment_details (order_id, user_id, amount, status, payment_method, transaction_id)
+            SELECT ?, user_id, total_amount, 'success', 'admin_override', ?
+            FROM orders WHERE id = ?
+        `).bind(orderId, `admin_paid_${orderId}_${Date.now()}`, orderId).run();
+
+        res.status(200).json({
+            success: true,
+            message: "Order marked as paid successfully"
+        });
 
     } catch (err) {
         console.error(err);
