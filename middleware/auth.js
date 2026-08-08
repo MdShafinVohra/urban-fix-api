@@ -4,21 +4,20 @@ import { env } from "cloudflare:workers";
 export const verifyToken = async (req, res, next) => {
     const authHeader = req.headers.authorization;
 
+    console.log(authHeader)
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ success: false, error: "UnAuthorized or Missing Token" });
     }
 
     const idToken = authHeader.split(' ')[1];
 
-    // console.log(idToken)
-    // console.log(authHeader)
-
 
     try {
         // FIX 1: Call getAdminAuth() as a function
         const decodedToken = await getAdminAuth().verifyIdToken(idToken);
 
-        const DBuser = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(decodedToken.email).first();
+        const DBuser = await await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(decodedToken.email).first();
 
         req.user = decodedToken;
         req.dbUser = DBuser;
@@ -52,10 +51,12 @@ export const verifyAdmin = async (req, res, next) => {
 
 export const verifyAgent = async (req, res, next) => {
     try {
-        if (!req.dbUser || req.dbUser.role !== "AGENT") {
+        if (!req.dbUser || req.dbUser.role !== "agent") {
             return res.status(403).json({ success: false, error: "Agent access required" });
         }
 
+        const agent = await env.DB.prepare("SELECT * FROM agents WHERE email = ?").bind(req.dbUser.email).first();
+        req.agent = agent;
         next();
     } catch (err) {
         res.status(500).json({ success: false, error: "Server Error" });

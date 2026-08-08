@@ -20,7 +20,11 @@
 			"database_name": "urbanFix",
 			"database_id": "485379c1-f7ff-44d4-92b9-6553942b6e46"
 		}
-	]
+	],
+	"vars": {
+		"RAZORPAY_KEY_ID": "rzp_test_TJZji5pZmdHlgV",
+		"RAZORPAY_KEY_SECRET": "O0ay1cMBNLIgf95v6q4nvgf9"
+	}
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
