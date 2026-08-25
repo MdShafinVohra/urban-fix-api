@@ -9,6 +9,9 @@ import orderRouter from "../routes/ordersRoutes";
 import paymentRouter from "../routes/paymentsRoutes";
 import adminRouter from "../routes/adminRoutes";
 import agentRouter from "../routes/agentRoutes"
+import restaurantRouter from "../routes/restaurantRoutes"
+import foodCartRouter from "../routes/foodCartRoutes"
+import foodOrdersRouter from "../routes/foodOrdersRoutes"
 import crypto from "crypto";
 import { verifyToken } from "../middleware/auth";
 import { AwsClient } from "aws4fetch";
@@ -20,7 +23,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(urlencoded({ extended: true, limit: '10mb' }));
 
 app.use(cors({
-	origin: ["http://localhost:4200", "https://urban-fix-front.pages.dev"],
+	origin: ["http://localhost:4200", "https://urban-fix-front.pages.dev", "https://urbanfixhome.com/"],
 	methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
 	allowedHeaders: ["Content-Type", "Authorization"],
 }));
@@ -101,6 +104,11 @@ app.use("/admin", adminRouter);
 
 // Agent Routes
 app.use("/agent", agentRouter);
+
+// Restaurant Routes
+app.use("/restaurant", restaurantRouter);
+app.use("/food-cart", foodCartRouter);
+app.use("/food-orders", foodOrdersRouter);
 
 app.get("/", (req, res) => {
 	res.json({ message: "Express.js running on Cloudflare Workers!" });
