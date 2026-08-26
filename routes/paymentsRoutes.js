@@ -13,15 +13,19 @@ router.post('/initiate', verifyToken, async (req, res) => {
     try {
         const db = await env.DB;
         const userId = req.dbUser.id;
-        const { order_id } = req.body;
+        const { order_id, order_type = 'service' } = req.body;
 
         if (!order_id) {
             return res.status(400).json({ success: false, message: "order_id is required" });
         }
 
-        // 1. Fetch the order to ensure it belongs to the user and needs payment
+        if (!['service', 'food'].includes(order_type)) {
+            return res.status(400).json({ success: false, message: 'Invalid order type' });
+        }
+        const orderTable = order_type === 'food' ? 'food_orders' : 'orders';
+        const paymentTable = order_type === 'food' ? 'food_payment_details' : 'payment_details';
         const order = await db.prepare(
-            'SELECT total_amount, payment_status FROM orders WHERE id = ? AND user_id = ?'
+            `SELECT total_amount, payment_status FROM ${orderTable} WHERE id = ? AND user_id = ?`
         ).bind(order_id, userId).first();
 
         if (!order) {
@@ -63,8 +67,9 @@ router.post('/initiate', verifyToken, async (req, res) => {
         const razorpayOrder = await razorpayResponse.json();
 
         // 4. Create a pending payment record in our DB, storing the razorpay_order_id
+        const paymentColumn = order_type === 'food' ? 'food_order_id' : 'order_id';
         const paymentRecord = await db.prepare(`
-            INSERT INTO payment_details (order_id, user_id, amount, status, transaction_id) 
+            INSERT INTO ${paymentTable} (${paymentColumn}, user_id, amount, status, transaction_id)
             VALUES (?, ?, ?, 'pending', ?) RETURNING id
         `).bind(order_id, userId, order.total_amount, razorpayOrder.id).first();
 
@@ -93,12 +98,18 @@ router.post('/verify', verifyToken, async (req, res) => {
     try {
         const db = await env.DB;
         const userId = req.dbUser.id;
-        const { order_id, razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
+        const { order_id, razorpay_payment_id, razorpay_order_id, razorpay_signature, order_type = 'service' } = req.body;
 
         // Validate required fields
         if (!order_id || !razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
             return res.status(400).json({ success: false, message: "Missing payment verification details" });
         }
+        if (!['service', 'food'].includes(order_type)) {
+            return res.status(400).json({ success: false, message: 'Invalid order type' });
+        }
+        const orderTable = order_type === 'food' ? 'food_orders' : 'orders';
+        const paymentTable = order_type === 'food' ? 'food_payment_details' : 'payment_details';
+        const paymentColumn = order_type === 'food' ? 'food_order_id' : 'order_id';
 
         // 1. Verify the payment signature
         //    Algorithm: HMAC-SHA256(razorpay_order_id + "|" + razorpay_payment_id, KEY_SECRET)
@@ -112,10 +123,10 @@ router.post('/verify', verifyToken, async (req, res) => {
             // Signature mismatch — do NOT mark as paid
             // Update payment record as failed
             await db.prepare(`
-                UPDATE payment_details 
+                UPDATE ${paymentTable}
                 SET status = 'failed', payment_method = 'razorpay'
-                WHERE transaction_id = ? AND user_id = ? AND status = 'pending'
-            `).bind(razorpay_order_id, userId).run();
+                WHERE transaction_id = ? AND ${paymentColumn} = ? AND user_id = ? AND status = 'pending'
+            `).bind(razorpay_order_id, order_id, userId).run();
 
             return res.status(400).json({
                 success: false,
@@ -129,18 +140,18 @@ router.post('/verify', verifyToken, async (req, res) => {
         // Update payment_details: set status to success and store the actual payment ID
         statements.push(
             db.prepare(`
-                UPDATE payment_details 
+                UPDATE ${paymentTable}
                 SET transaction_id = ?, payment_method = 'razorpay', status = 'success'
-                WHERE transaction_id = ? AND user_id = ? AND status = 'pending'
-            `).bind(razorpay_payment_id, razorpay_order_id, userId)
+                WHERE transaction_id = ? AND ${paymentColumn} = ? AND user_id = ? AND status = 'pending'
+            `).bind(razorpay_payment_id, razorpay_order_id, order_id, userId)
         );
 
         // Update the main orders table payment status
         statements.push(
             db.prepare(`
-                UPDATE orders 
+                UPDATE ${orderTable}
                 SET payment_status = 'paid' 
-                WHERE id = ? AND user_id = ?
+                WHERE id = ? AND user_id = ? AND payment_status != 'paid'
             `).bind(order_id, userId)
         );
 
