@@ -74,3 +74,15 @@ export const verifyVendor = async (req, res, next) => {
         res.status(500).json({ success: false, error: "Server Error" });
     }
 }
+
+export const verifyRestaurantOwner = async (req, res, next) => {
+    try {
+        if (!req.dbUser || req.dbUser.role !== "RESTAURANT") {
+            return res.status(403).json({ success: false, error: "Restaurant owner access required" });
+        }
+
+        next();
+    } catch (err) {
+        res.status(500).json({ success: false, error: "Server Error" });
+    }
+}

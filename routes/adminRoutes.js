@@ -67,6 +67,49 @@ router.get('/agents', verifyToken, verifyAdmin, async (req, res) => {
     }
 });
 
+// POST /admin/restaurant-users - Create a new Restaurant User
+router.post('/restaurant-users', verifyToken, verifyAdmin, async (req, res) => {
+    try {
+        const db = await env.DB;
+        const { name, email, phone } = req.body;
+
+        if (!name || !email || !phone) {
+            return res.status(400).json({ success: false, message: "All fields are required" });
+        }
+
+        const result = await db.prepare(`
+            INSERT INTO users (name, user_name, email, phone, role) 
+            VALUES (?, ?, ?, ?, 'RESTAURANT') RETURNING id
+        `).bind(name, name, email, phone).first();
+
+        res.status(201).json({ success: true, message: "Restaurant User created successfully", user_id: result.id });
+    } catch (err) {
+        console.error(err);
+        if (err.message.includes('UNIQUE constraint failed')) {
+            return res.status(400).json({ success: false, message: "Email or phone already exists." });
+        }
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// GET /admin/restaurant-users - List all Restaurant Users
+router.get('/restaurant-users', verifyToken, verifyAdmin, async (req, res) => {
+    try {
+        const db = await env.DB;
+        const query = `
+            SELECT id as user_id, name, email, phone, created_at 
+            FROM users 
+            WHERE role = 'RESTAURANT'
+            ORDER BY created_at DESC
+        `;
+        const { results } = await db.prepare(query).all();
+        res.status(200).json({ success: true, users: results });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
 
 // This endpoint grabs all ordered_items that haven't been assigned an agent yet. We JOIN the orders table to get the customer's address and city, and the services table to know what category of worker is needed.
 router.get('/tasks/unassigned', verifyToken, verifyAdmin, async (req, res) => {
