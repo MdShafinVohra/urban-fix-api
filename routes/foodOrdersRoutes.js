@@ -16,7 +16,7 @@ router.post('/checkout', verifyToken, async (req, res) => {
 
         // Fetch cart items
         const cartQuery = `
-            SELECT fc.quantity, rm.id as menu_item_id, rm.price, rm.restaurant_id 
+            SELECT fc.quantity, fc.size, COALESCE(fc.unit_price, rm.price) AS price, rm.id as menu_item_id, rm.restaurant_id
             FROM food_carts fc
             JOIN restaurant_menus rm ON fc.menu_item_id = rm.id
             WHERE fc.user_id = ?
@@ -44,9 +44,9 @@ router.post('/checkout', verifyToken, async (req, res) => {
         for (const item of cartItems) {
             statements.push(
                 db.prepare(`
-                    INSERT INTO food_ordered_items (order_id, menu_item_id, price, quantity) 
-                    VALUES (?, ?, ?, ?)
-                `).bind(orderId, item.menu_item_id, item.price, item.quantity)
+                    INSERT INTO food_ordered_items (order_id, menu_item_id, price, quantity, size)
+                    VALUES (?, ?, ?, ?, ?)
+                `).bind(orderId, item.menu_item_id, item.price, item.quantity, item.size)
             );
         }
 
@@ -92,7 +92,7 @@ router.get('/', verifyToken, async (req, res) => {
                             'item_id', i.id,
                             'menu_item_name', rm.name,
                             'price', i.price,
-                            'quantity', i.quantity
+                            'quantity', i.quantity, 'size', i.size
                         )
                     )
                     FROM food_ordered_items i

@@ -4,7 +4,17 @@ import { verifyToken, verifyAdmin, verifyRestaurantOwner } from "../middleware/a
 
 const router = express.Router();
 const restaurantFields = ['name', 'description', 'address', 'city_id', 'image_url', 'owner_id'];
-const menuFields = ['name', 'description', 'price', 'image_url', 'is_veg'];
+const menuFields = ['name', 'description', 'price', 'price_quarter', 'price_half', 'price_full', 'image_url', 'is_veg'];
+
+function parseMenuPrices(values, current = {}) {
+    const optionalPrice = (value) => value === null || value === undefined || value === '' ? null : Number(value);
+    const quarter = optionalPrice(values.price_quarter ?? current.price_quarter);
+    const half = optionalPrice(values.price_half ?? current.price_half);
+    const full = Number(values.price_full ?? values.price ?? current.price_full ?? current.price);
+    if (!Number.isFinite(full) || full <= 0) return null;
+    if ([quarter, half].some((value) => value !== null && (!Number.isFinite(value) || value <= 0))) return null;
+    return { quarter, half, full };
+}
 
 function parsePositiveId(value) {
     const id = Number(value);
@@ -176,15 +186,15 @@ router.post('/:id/menu', verifyToken, async (req, res) => {
         if (!restaurantId) return res.status(400).json({ success: false, message: 'Invalid restaurant id' });
         const restaurant = await requireRestaurantAccess(req, res, restaurantId);
         if (!restaurant) return;
-        const { name, description = null, price, image_url = null, is_veg = true } = req.body;
-        const parsedPrice = Number(price);
-        if (!name?.trim() || !Number.isFinite(parsedPrice) || parsedPrice <= 0) {
-            return res.status(400).json({ success: false, message: 'A menu item name and positive price are required' });
+        const { name, description = null, image_url = null, is_veg = true } = req.body;
+        const prices = parseMenuPrices(req.body);
+        if (!name?.trim() || !prices) {
+            return res.status(400).json({ success: false, message: 'Name and a positive full price are required. Quarter and half prices are optional.' });
         }
         const result = await env.DB.prepare(`
-            INSERT INTO restaurant_menus (restaurant_id, name, description, price, image_url, is_veg)
-            VALUES (?, ?, ?, ?, ?, ?) RETURNING id
-        `).bind(restaurant.id, name.trim(), description, parsedPrice, image_url, Boolean(is_veg)).first();
+            INSERT INTO restaurant_menus (restaurant_id, name, description, price, price_quarter, price_half, price_full, image_url, is_veg)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+        `).bind(restaurant.id, name.trim(), description, prices.full, prices.quarter, prices.half, prices.full, image_url, Boolean(is_veg)).first();
         res.status(201).json({ success: true, message: 'Menu item added', menu_item_id: result.id });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -204,10 +214,10 @@ router.put('/:id/menu/:menuId', verifyToken, async (req, res) => {
         const update = Object.fromEntries(menuFields.filter((key) => Object.hasOwn(req.body, key)).map((key) => [key, req.body[key]]));
         if (Object.keys(update).length === 0) return res.status(400).json({ success: false, message: 'No menu fields supplied' });
         const name = Object.hasOwn(update, 'name') ? String(update.name).trim() : existing.name;
-        const price = Object.hasOwn(update, 'price') ? Number(update.price) : existing.price;
-        if (!name || !Number.isFinite(price) || price <= 0) return res.status(400).json({ success: false, message: 'A menu item name and positive price are required' });
-        await db.prepare(`UPDATE restaurant_menus SET name = ?, description = ?, price = ?, image_url = ?, is_veg = ? WHERE id = ?`)
-            .bind(name, Object.hasOwn(update, 'description') ? update.description : existing.description, price,
+        const prices = parseMenuPrices(update, existing);
+        if (!name || !prices) return res.status(400).json({ success: false, message: 'Name and a positive full price are required. Quarter and half prices are optional.' });
+        await db.prepare(`UPDATE restaurant_menus SET name = ?, description = ?, price = ?, price_quarter = ?, price_half = ?, price_full = ?, image_url = ?, is_veg = ? WHERE id = ?`)
+            .bind(name, Object.hasOwn(update, 'description') ? update.description : existing.description, prices.full, prices.quarter, prices.half, prices.full,
                 Object.hasOwn(update, 'image_url') ? update.image_url : existing.image_url,
                 Object.hasOwn(update, 'is_veg') ? Boolean(update.is_veg) : existing.is_veg, menuId).run();
         res.status(200).json({ success: true, message: 'Menu item updated' });
