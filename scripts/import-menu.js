@@ -9,9 +9,11 @@ const EXCEL_FILE = process.argv[3];
 
 // ⚠️ ADJUST these per file if a restaurant's sheet uses different headers
 const ITEM_COLUMN = 'FOOD ITEMS';
-const PRICE_COLUMN = 'FULL';
+const FULL_COLUMN = 'FULL';
+const HALF_COLUMN = 'HALF';
+const QUARTER_COLUMN = 'QUARTER';
 
-// Rough heuristic only — always spot-check after import (see note below)
+// Rough heuristic only — always spot-check after import
 const NONVEG_KEYWORDS = [
     'chicken', 'mutton', 'fish', 'egg', 'prawn', 'meat',
     'keema', 'lamb', 'beef', 'pork', 'crab', 'squid'
@@ -27,10 +29,18 @@ function escapeSql(value) {
     return `'${String(value).replace(/'/g, "''")}'`;
 }
 
+// Returns null for empty cells AND for "NA" / "na" / "N/A" etc.
 function parsePrice(raw) {
-    if (raw === undefined || raw === null || raw === '') return null;
-    const num = parseFloat(String(raw).replace(/[^\d.]/g, ''));
+    if (raw === undefined || raw === null) return null;
+    const str = String(raw).trim();
+    if (str === '' || /^n\/?a$/i.test(str)) return null;
+
+    const num = parseFloat(str.replace(/[^\d.]/g, ''));
     return isNaN(num) ? null : num;
+}
+
+function sqlNumber(value) {
+    return value === null ? 'NULL' : value;
 }
 
 function guessIsVeg(itemName) {
@@ -49,17 +59,26 @@ function main() {
 
     rows.forEach((row, index) => {
         const itemName = String(row[ITEM_COLUMN] ?? '').trim();
-        const price = parsePrice(row[PRICE_COLUMN]);
+        const fullPrice = parsePrice(row[FULL_COLUMN]);
+        const halfPrice = parsePrice(row[HALF_COLUMN]);
+        const quarterPrice = parsePrice(row[QUARTER_COLUMN]);
 
-        if (!itemName || price === null) {
-            skipped.push({ row: index + 2, itemName, rawPrice: row[PRICE_COLUMN] });
+        // Full price is the mandatory baseline — every item needs at least this
+        if (!itemName || fullPrice === null) {
+            skipped.push({
+                row: index + 2,
+                itemName,
+                rawFull: row[FULL_COLUMN],
+                rawHalf: row[HALF_COLUMN],
+                rawQuarter: row[QUARTER_COLUMN]
+            });
             return;
         }
 
         const isVeg = guessIsVeg(itemName);
 
         statements.push(
-            `INSERT INTO restaurant_menus (restaurant_id, name, price, is_veg) VALUES (${RESTAURANT_ID}, ${escapeSql(itemName)}, ${price}, ${isVeg});`
+            `INSERT INTO restaurant_menus (restaurant_id, name, price, price_full, price_half, price_quarter, is_veg) VALUES (${RESTAURANT_ID}, ${escapeSql(itemName)}, ${fullPrice}, ${fullPrice}, ${sqlNumber(halfPrice)}, ${sqlNumber(quarterPrice)}, ${isVeg});`
         );
     });
 
@@ -69,8 +88,10 @@ function main() {
 
     console.log(`✅ Generated ${statements.length} INSERT statements → ${outputPath}`);
     if (skipped.length) {
-        console.log(`⚠️  Skipped ${skipped.length} row(s) missing item name or price:`);
-        skipped.forEach((s) => console.log(`   Row ${s.row}: name="${s.itemName}" price="${s.rawPrice}"`));
+        console.log(`⚠️  Skipped ${skipped.length} row(s) missing item name or full price:`);
+        skipped.forEach((s) =>
+            console.log(`   Row ${s.row}: name="${s.itemName}" full="${s.rawFull}" half="${s.rawHalf}" quarter="${s.rawQuarter}"`)
+        );
     }
 }
 
