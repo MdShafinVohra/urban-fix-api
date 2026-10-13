@@ -82,6 +82,7 @@ router.get('/', verifyToken, async (req, res) => {
                 o.id as order_id,
                 o.total_amount,
                 o.status,
+                o.payment_status,
                 o.delivery_address,
                 o.created_at,
                 r.name as restaurant_name,

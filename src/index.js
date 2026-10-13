@@ -12,6 +12,7 @@ import agentRouter from "../routes/agentRoutes"
 import restaurantRouter from "../routes/restaurantRoutes"
 import foodCartRouter from "../routes/foodCartRoutes"
 import foodOrdersRouter from "../routes/foodOrdersRoutes"
+import foodPaymentsRouter from "../routes/foodPaymentsRoutes"
 import crypto from "crypto";
 import { verifyToken } from "../middleware/auth";
 import { AwsClient } from "aws4fetch";
@@ -109,6 +110,7 @@ app.use("/agent", agentRouter);
 app.use("/restaurant", restaurantRouter);
 app.use("/food-cart", foodCartRouter);
 app.use("/food-orders", foodOrdersRouter);
+app.use("/food-payments", foodPaymentsRouter);
 
 app.get("/", (req, res) => {
 	res.json({ message: "Express.js running on Cloudflare Workers!" });
