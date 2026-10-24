@@ -4,6 +4,64 @@ import { verifyToken, verifyAdmin } from "../middleware/auth";
 
 const router = express.Router();
 
+// GET: Search services by query string
+router.get('/search', async (req, res) => {
+    try {
+        const db = await env.DB;
+        const searchQuery = (req.query.q || '').trim();
+
+        if (!searchQuery) {
+            return res.status(400).json({ success: false, message: "Search query 'q' is required" });
+        }
+
+        const likeTerm = `%${searchQuery}%`;
+
+        const query = `
+            SELECT 
+                s.id, 
+                s.name, 
+                s.price, 
+                s.description, 
+                s.image_url,
+                s.created_at,
+                c.id as category_id,
+                c.name as category_name, 
+                sc.id as sub_category_id,
+                sc.name as sub_category_name,
+                (
+                    SELECT json_group_array(
+                        json_object('id', cities.id, 'name', cities.name)
+                    )
+                    FROM service_cities
+                    JOIN cities ON service_cities.city_id = cities.id
+                    WHERE service_cities.service_id = s.id
+                ) as cities
+            FROM services s
+            LEFT JOIN categories c ON s.category_id = c.id
+            LEFT JOIN sub_categories sc ON s.sub_category_id = sc.id
+            WHERE s.name LIKE ? OR s.description LIKE ? OR c.name LIKE ? OR sc.name LIKE ?
+            ORDER BY 
+                CASE WHEN s.name LIKE ? THEN 0 ELSE 1 END,
+                s.created_at DESC
+        `;
+
+        const { results } = await db.prepare(query)
+            .bind(likeTerm, likeTerm, likeTerm, likeTerm, likeTerm)
+            .all();
+
+        const formattedServices = results.map(service => ({
+            ...service,
+            cities: JSON.parse(service.cities)
+        }));
+
+        res.status(200).json({ success: true, services: formattedServices });
+
+    } catch (err) {
+        console.error("Error searching services:", err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
 // GET: Fetch all services
 router.get('/', async (req, res) => {
     try {

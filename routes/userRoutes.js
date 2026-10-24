@@ -69,11 +69,13 @@ router.post("/", verifyToken, async (req, res) => {
         console.log(results);
 
         if (results.success) {
+            const newUser = await env.DB.prepare("SELECT * FROM users WHERE email = ?").bind(email).first();
+
             res.status(201).json({
                 success: true,
                 message: "member created successfully",
                 id: results.meta.last_row_id,
-                dbUser: req.dbUser // Assuming this is populated by verifyToken middleware
+                dbUser: newUser // Assuming this is populated by verifyToken middleware
             });
             console.log(`Member created successfully with ID: ${results.meta.last_row_id}`);
         } else {
